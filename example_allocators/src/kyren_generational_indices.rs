@@ -3,9 +3,6 @@
 /// 
 /// This is the base implementation I will be testing my allocators with.
 
-use std::alloc;
-
-
 /// This is the simplest implementation, this struct will tell you which index
 /// to use next, but the actual objects should be managed by yourself. 
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -176,88 +173,3 @@ impl<T> GenerationalIndexArray<T>
 // Te previous implementation has some problems about references and pointers. So instead 
 // we will store pointers instead of the entire thing we are allocating.
 
-pub struct GenerationalPointerEntry<T>
-{
-    generation: u32,
-    ptr: *mut T
-}
-pub struct GenerationalPointersArray<T>
-{
-    entries : Vec<GenerationalPointerEntry<T>>,
-    free: Vec<usize>
-}
-
-impl<T> GenerationalPointersArray<T>
-{
-    pub fn new() -> Self
-    {
-        GenerationalPointersArray
-        {
-            entries: vec![],
-            free: vec![]
-        }
-    }
-
-    pub fn allocate(&mut self) -> GenerationalIndex
-    {
-        if self.free.is_empty()
-        {
-            let new_entry = self._allocate_entry();
-            let new_entry_index = self.entries.len();
-            self.entries.push(new_entry);
-
-            return GenerationalIndex{index: new_entry_index, generation: 0};
-        }
-
-        let next_free = self.free.pop().unwrap();
-        let entry : &GenerationalPointerEntry<T> = &self.entries[next_free];
-
-        let gen_index = GenerationalIndex{
-            index : next_free,
-            generation : entry.generation
-        };
-
-        return gen_index;
-    }
-
-    /// Called internally when we have to create a new entry instead of 
-    /// reusing an old one
-    fn _allocate_entry(&mut self) -> GenerationalPointerEntry<T>
-    {
-        unsafe
-        {
-            let item_mem = alloc::alloc(alloc::Layout::new::<T>()).cast::<T>();
-            GenerationalPointerEntry { generation: 0, ptr: item_mem }
-        }
-    }
-
-    #[inline(always)]
-    pub fn is_live(&self, index: &GenerationalIndex) -> bool
-    {
-        return index.generation == self.entries[index.index].generation;
-    }
-
-    pub fn get(&self, index: &GenerationalIndex) -> Option<&mut T>
-    {
-        if !self.is_live(index)
-        {
-            return None;
-        }
-
-        let entry : &GenerationalPointerEntry<T> = &self.entries[index.index];
-        return unsafe { Some(entry.ptr.as_mut().unwrap_unchecked())}
-    }
-
-    pub fn free(&mut self, index: &GenerationalIndex)
-    {
-        if self.is_live(index)
-        {
-            panic!("Trying to free already unused index");
-        }
-
-        let index = index.index;
-        self.free.push(index);
-        let entry : &mut GenerationalPointerEntry<T> = &mut self.entries[index];
-        entry.generation += 1;
-    }
-}
