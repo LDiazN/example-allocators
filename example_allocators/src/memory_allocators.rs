@@ -1,8 +1,8 @@
 /// These are memory allocators that allocate free memory in the same
 /// way generational indices allocate new indices.
 
-use std::alloc;
-
+use std::{alloc, ops::DerefMut};
+use std::ops::Deref;
 
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct GenerationalIndex
@@ -99,5 +99,151 @@ impl<T> GenerationalPointersArray<T>
         self.free.push(index);
         let entry : &mut GenerationalPointerEntry<T> = &mut self.entries[index];
         entry.generation += 1;
+    }
+}
+
+// The following version is similar to the one before but we use pointers as the handle to 
+// simplify and optimize access
+
+pub type Generation = u32;
+
+#[derive(Debug, Default)]
+pub struct EntryHeader
+{
+    generation: Generation,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct EntityEntry<T>
+{
+    header: EntryHeader,
+    item: T
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EntityPtr<T>
+{
+    ptr : *mut T,
+    generation: Generation
+}
+
+pub struct EntityAllocator<T> 
+{
+    free: Vec<*mut T>,
+    entries: Vec<Box<EntityEntry<T>>>
+}
+
+pub trait LifeCycle
+{
+    fn reset(&mut self);
+
+    fn new() -> Self;
+
+    // Delete or drop implemented by drop trait 
+}
+
+impl<T> EntityAllocator<T>
+    where T : LifeCycle
+{
+    pub fn new() -> Self
+    {
+        EntityAllocator
+        {
+            entries: vec![],
+            free: vec![]
+        }
+    }
+
+    pub fn allocate(&mut self, init_fn : fn(&mut T)) -> EntityPtr<T>
+    {
+        if self.free.is_empty()
+        {
+            // Allocate a new entry
+            let mut new_entry = Box::new(
+                EntityEntry{
+                    header: EntryHeader::default(), 
+                    item: T::new()
+                }
+            );
+
+            // Pointer to return
+            let t_ptr = &mut new_entry.item as *mut T;
+
+            // Initialize new entry:
+            (init_fn)(&mut new_entry.item);
+            
+            self.entries.push(new_entry);
+
+            // Create pointer:
+            return EntityPtr{ptr: t_ptr, generation: 0};
+        }
+
+        let entity_ptr = self.free.pop().unwrap();
+        let entry = unsafe {EntityEntry::from_ptr(entity_ptr)};
+        (init_fn)(&mut entry.item);
+
+        return EntityPtr{ptr: entity_ptr, generation: entry.header.generation};
+    }
+
+    pub fn free(&mut self, entity_ptr: &EntityPtr<T>)
+    {
+        if !entity_ptr.is_live()
+        {
+            panic!("Trying to free already unused index");
+        }
+
+        let entry  = unsafe {EntityEntry::from_ptr(entity_ptr.ptr)};
+        entry.header.generation += 1;
+        entry.item.reset();
+
+        self.free.push(entity_ptr.ptr);
+    }
+}
+
+impl<T> Deref for EntityPtr<T> {
+    
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        assert!(self.is_live(), "Trying to deref invalid entity ptr");
+        unsafe
+        {
+            self.ptr.as_ref().unwrap()
+        }
+    }
+}
+
+impl<T> DerefMut for EntityPtr<T>
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        assert!(self.is_live(), "Trying to deref invalid entity ptr");
+        unsafe
+        {
+            self.ptr.as_mut().unwrap()
+        }
+    }
+}
+
+impl<'a, T> EntityEntry<T>
+{
+    unsafe fn from_ptr(ptr: *mut T) -> &'a mut Self
+    {
+        ptr
+            .cast::<u8>()
+            .sub(std::mem::size_of::<EntityEntry<T>>() - std::mem::size_of::<T>())
+            .cast::<EntityEntry<T>>()
+            .as_mut()
+            .unwrap()
+    }
+}
+
+impl<T> EntityPtr<T>
+{
+    pub fn is_live(&self) -> bool
+    {
+        let entry = unsafe {EntityEntry::from_ptr(self.ptr)};
+
+        return entry.header.generation == self.generation;
     }
 }
