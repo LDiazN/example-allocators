@@ -1,3 +1,4 @@
+use std::mem::MaybeUninit;
 /// These are memory allocators that allocate free memory in the same
 /// way generational indices allocate new indices.
 
@@ -118,7 +119,7 @@ pub struct EntryHeader
 pub struct EntityEntry<T>
 {
     header: EntryHeader,
-    item: T
+    item: MaybeUninit<T>
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -134,17 +135,9 @@ pub struct EntityAllocator<T>
     entries: Vec<Box<EntityEntry<T>>>
 }
 
-pub trait LifeCycle
-{
-    fn reset(&mut self);
-
-    fn new() -> Self;
-
-    // Delete or drop implemented by drop trait 
-}
 
 impl<T> EntityAllocator<T>
-    where T : LifeCycle
+    where T : Default
 {
     pub fn new() -> Self
     {
@@ -160,18 +153,23 @@ impl<T> EntityAllocator<T>
         if self.free.is_empty()
         {
             // Allocate a new entry
+            let mut mem = MaybeUninit::<T>::uninit();
+            unsafe { mem.as_mut_ptr().write(T::default()) };
+
             let mut new_entry = Box::new(
                 EntityEntry{
                     header: EntryHeader::default(), 
-                    item: T::new()
+                    item: mem
                 }
             );
 
             // Pointer to return
-            let t_ptr = &mut new_entry.item as *mut T;
+            let t_ptr = new_entry.item.as_mut_ptr();
 
             // Initialize new entry:
-            (init_fn)(&mut new_entry.item);
+            unsafe {
+                (init_fn)(new_entry.item.as_mut_ptr().as_mut().unwrap());   
+            }
             
             self.entries.push(new_entry);
 
@@ -181,7 +179,9 @@ impl<T> EntityAllocator<T>
 
         let entity_ptr = self.free.pop().unwrap();
         let entry = unsafe {EntityEntry::from_ptr(entity_ptr)};
-        (init_fn)(&mut entry.item);
+        unsafe {
+            (init_fn)(entry.item.as_mut_ptr().as_mut().unwrap());
+        }
 
         return EntityPtr{ptr: entity_ptr, generation: entry.header.generation};
     }
@@ -195,7 +195,7 @@ impl<T> EntityAllocator<T>
 
         let entry  = unsafe {EntityEntry::from_ptr(entity_ptr.ptr)};
         entry.header.generation += 1;
-        entry.item.reset();
+        unsafe { entry.item.assume_init_drop() };
 
         self.free.push(entity_ptr.ptr);
     }

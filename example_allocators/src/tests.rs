@@ -182,14 +182,7 @@ mod tests
             allocator.free(&entity);
             assert!(!entity.is_live());
 
-            // Check that the entity will reset after free
-            fn check_deallocated(entity : &mut Entity)
-            {
-                assert_eq!(entity.id, 0);
-                assert_eq!(entity.name.as_str(), "");
-                assert_eq!(entity.is_active, false);
-            }
-            allocator.allocate(check_deallocated);
+
         }
     }
 }
