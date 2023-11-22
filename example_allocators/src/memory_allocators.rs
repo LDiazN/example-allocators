@@ -15,7 +15,7 @@ pub struct GenerationalIndex
 pub struct GenerationalPointerEntry<T>
 {
     generation: u32,
-    ptr: MaybeUninit<T>
+    ptr: Box<MaybeUninit<T>>
 }
 
 /// This is a handle-based allocators.
@@ -75,7 +75,7 @@ impl<T> GenerationalPointersArray<T>
     /// reusing an old one
     fn _allocate_entry(&mut self) -> GenerationalPointerEntry<T>
     {
-        let item_mem = MaybeUninit::<T>::uninit();
+        let item_mem = Box::new(MaybeUninit::<T>::uninit());
         GenerationalPointerEntry { generation: 0, ptr: item_mem }
     }
 
