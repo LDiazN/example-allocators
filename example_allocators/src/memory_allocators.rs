@@ -15,7 +15,7 @@ pub struct GenerationalIndex
 pub struct GenerationalPointerEntry<T>
 {
     generation: u32,
-    ptr: *mut T
+    ptr: MaybeUninit<T>
 }
 
 /// This is a handle-based allocators.
@@ -23,12 +23,14 @@ pub struct GenerationalPointerEntry<T>
 /// Users will get a handle that they have to query with this struct
 /// to get the actual reference to the thing they want.
 pub struct GenerationalPointersArray<T>
+    where T : Default
 {
     entries : Vec<GenerationalPointerEntry<T>>,
     free: Vec<usize>
 }
 
 impl<T> GenerationalPointersArray<T>
+    where T: Default
 {
     pub fn new() -> Self
     {
@@ -43,33 +45,38 @@ impl<T> GenerationalPointersArray<T>
     {
         if self.free.is_empty()
         {
-            let new_entry = self._allocate_entry();
+            // Construct a new entry
+            let mut new_entry = self._allocate_entry();
             let new_entry_index = self.entries.len();
+
+            // Initialize it since it will be retrieved from this function
+            new_entry.ptr.write(T::default());
+
+            // Add it to the current list of entries 
             self.entries.push(new_entry);
+
 
             return GenerationalIndex{index: new_entry_index, generation: 0};
         }
 
         let next_free = self.free.pop().unwrap();
-        let entry : &GenerationalPointerEntry<T> = &self.entries[next_free];
+        let entry  = &mut self.entries[next_free];
 
-        let gen_index = GenerationalIndex{
+        // Initialize entry, don't return uninitialized memory
+        entry.ptr.write(T::default());
+
+        return GenerationalIndex{
             index : next_free,
             generation : entry.generation
         };
-
-        return gen_index;
     }
 
     /// Called internally when we have to create a new entry instead of 
     /// reusing an old one
     fn _allocate_entry(&mut self) -> GenerationalPointerEntry<T>
     {
-        unsafe
-        {
-            let item_mem = alloc::alloc(alloc::Layout::new::<T>()).cast::<T>();
-            GenerationalPointerEntry { generation: 0, ptr: item_mem }
-        }
+        let item_mem = MaybeUninit::<T>::uninit();
+        GenerationalPointerEntry { generation: 0, ptr: item_mem }
     }
 
     #[inline(always)]
@@ -78,20 +85,20 @@ impl<T> GenerationalPointersArray<T>
         return index.generation == self.entries[index.index].generation;
     }
 
-    pub fn get(&self, index: &GenerationalIndex) -> Option<&mut T>
+    pub fn get(&mut self, index: &GenerationalIndex) -> Option<&mut T>
     {
         if !self.is_live(index)
         {
             return None;
         }
 
-        let entry : &GenerationalPointerEntry<T> = &self.entries[index.index];
-        return unsafe { Some(entry.ptr.as_mut().unwrap_unchecked())}
+        let entry = &mut self.entries[index.index];
+        return unsafe { Some(entry.ptr.as_mut_ptr().as_mut().unwrap())}
     }
 
     pub fn free(&mut self, index: &GenerationalIndex)
     {
-        if self.is_live(index)
+        if !self.is_live(index)
         {
             panic!("Trying to free already unused index");
         }
@@ -100,6 +107,10 @@ impl<T> GenerationalPointersArray<T>
         self.free.push(index);
         let entry : &mut GenerationalPointerEntry<T> = &mut self.entries[index];
         entry.generation += 1;
+        unsafe
+        {
+            entry.ptr.assume_init_drop();
+        }
     }
 }
 
@@ -135,7 +146,6 @@ pub struct EntityAllocator<T>
     entries: Vec<Box<EntityEntry<T>>>
 }
 
-
 impl<T> EntityAllocator<T>
     where T : Default
 {
@@ -148,13 +158,13 @@ impl<T> EntityAllocator<T>
         }
     }
 
-    pub fn allocate(&mut self, init_fn : fn(&mut T)) -> EntityPtr<T>
+    pub fn allocate(&mut self, init_fn : impl Fn(&mut T)) -> EntityPtr<T>
     {
         if self.free.is_empty()
         {
             // Allocate a new entry
             let mut mem = MaybeUninit::<T>::uninit();
-            unsafe { mem.as_mut_ptr().write(T::default()) };
+            mem.write(T::default());
 
             let mut new_entry = Box::new(
                 EntityEntry{
@@ -206,7 +216,7 @@ impl<T> Deref for EntityPtr<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        assert!(self.is_live(), "Trying to deref invalid entity ptr");
+        debug_assert!(self.is_live(), "Trying to deref invalid entity ptr");
         unsafe
         {
             self.ptr.as_ref().unwrap()
@@ -217,7 +227,7 @@ impl<T> Deref for EntityPtr<T> {
 impl<T> DerefMut for EntityPtr<T>
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        assert!(self.is_live(), "Trying to deref invalid entity ptr");
+        debug_assert!(self.is_live(), "Trying to deref invalid entity ptr");
         unsafe
         {
             self.ptr.as_mut().unwrap()

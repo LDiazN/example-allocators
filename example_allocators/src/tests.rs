@@ -141,21 +141,62 @@ mod tests
             name: String
         }
 
-        impl LifeCycle for Entity
+        impl Default for Entity
         {
-            fn new() -> Self {
-                Self {
-                    id: 0, 
-                    is_active: false, 
-                    name: "".to_string()
-                }
+            fn default() -> Self {
+                Self { id: 0, is_active: false, name: "".to_string() }
+            }
+        }
+
+        #[test]
+        fn test_generational_pointer_array_allocate()
+        {
+            let mut gpa = GenerationalPointersArray::<Entity>::new();
+            let entity_handle = gpa.allocate();
+
+            // Try initialize it 
+            {
+                let entity_ref = gpa.get(&entity_handle);
+                assert!(entity_ref.is_some());
+                let entity_ref = entity_ref.unwrap();
+
+                entity_ref.id = 42;
+                entity_ref.name = "test1".to_owned();
+                entity_ref.is_active = true;
             }
 
-            fn reset(&mut self) {
-                self.id = 0;
-                self.is_active = false;
-                self.name = "".to_string();
+            // Check that lookup works properly, we're looking up the same entity that was
+            // initialized in the step before
+            {
+                let entity_ref = gpa.get(&entity_handle);
+                assert!(entity_ref.is_some());
+                let entity_ref = entity_ref.unwrap();
+                assert_eq!(entity_ref.id, 42);
+                assert_eq!(entity_ref.name.as_str(), "test1");
+                assert_eq!(entity_ref.is_active, true);
             }
+        }
+
+        #[test]   
+        fn test_generational_pointer_array_free()
+        {
+            let mut gpa = GenerationalPointersArray::<Entity>::new();
+            let entity_handle = gpa.allocate();
+
+            assert!(gpa.get(&entity_handle).is_some());
+            gpa.free(&entity_handle);
+            assert!(gpa.get(&entity_handle).is_none());
+        }
+
+        #[test]   
+        #[should_panic]
+        fn test_generational_pointer_array_double_free()
+        {
+            let mut gpa = GenerationalPointersArray::<Entity>::new();
+            let entity_handle = gpa.allocate();
+
+            gpa.free(&entity_handle);
+            gpa.free(&entity_handle);
         }
 
         #[test]
@@ -181,8 +222,6 @@ mod tests
             assert!(entity.is_live());
             allocator.free(&entity);
             assert!(!entity.is_live());
-
-
         }
     }
 }
