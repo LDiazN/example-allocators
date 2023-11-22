@@ -1,37 +1,22 @@
-/// This is a simple generational indices implementation using Katherine's West draft implementation
+/// This is a simple generational indices implementation using Katherine West' draft implementation
 /// presented here: https://kyren.github.io/2018/09/14/rustconf-talk.html
 /// 
 /// This is the base implementation I will be testing my allocators with.
 
+#[derive(Debug, PartialEq, Default)]
 /// This is the simplest implementation, this struct will tell you which index
 /// to use next, but the actual objects should be managed by yourself. 
+pub struct GenerationalIndices
+{
+    indices : Vec<u32>, // Generations. Indices are specified by the array position
+    pub free : Vec<usize>
+}
+
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct GenerationalIndex
 {
     index : usize,
     generation : u32
-}
-
-impl GenerationalIndex
-{
-    #[inline(always)]
-    pub fn get_generation(&self) -> u32
-    {
-        self.generation
-    }
-
-    #[inline(always)]
-    pub fn get_index(&self) -> usize
-    {
-        self.index
-    }
-}
-
-#[derive(Debug, PartialEq, Default)]
-pub struct GenerationalIndices
-{
-    indices : Vec<u32>, // Generations. Indices are specified by the array position
-    pub free : Vec<usize>
 }
 
 impl GenerationalIndices
@@ -73,6 +58,21 @@ impl GenerationalIndices
 
         self.free.push(index.index);
         self.indices[index.index] += 1;
+    }
+}
+
+impl GenerationalIndex
+{
+    #[inline(always)]
+    pub fn get_generation(&self) -> u32
+    {
+        self.generation
+    }
+
+    #[inline(always)]
+    pub fn get_index(&self) -> usize
+    {
+        self.index
     }
 }
 

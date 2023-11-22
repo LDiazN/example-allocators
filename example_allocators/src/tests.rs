@@ -223,5 +223,45 @@ mod tests
             allocator.free(&entity);
             assert!(!entity.is_live());
         }
+
+        #[test]
+        fn test_inplace_mem_alloc_alloc()
+        {
+            let mut inplace_alloc = InPlaceMemoryAllocator::<Entity>::new();
+            let entity_handle = inplace_alloc.allocate();
+            {
+                let entity_ref = inplace_alloc.get(&entity_handle);
+                entity_ref.id = 42;
+                entity_ref.is_active = true;
+                entity_ref.name = "test".to_owned();
+            }
+
+            let entity_ref = inplace_alloc.get(&entity_handle);
+            assert_eq!(entity_ref.id, 42);
+            assert_eq!(entity_ref.is_active, true);
+            assert_eq!(entity_ref.name.as_str(), "test");
+        }
+
+        #[test]
+        fn test_inplace_mem_alloc_free()
+        {
+            let mut inplace_alloc = InPlaceMemoryAllocator::<Entity>::new();
+            let entity_handle = inplace_alloc.allocate();
+            assert!(inplace_alloc.is_live(&entity_handle));
+            inplace_alloc.free(&entity_handle);
+            assert!(!inplace_alloc.is_live(&entity_handle));
+        }
+
+        #[test]
+        #[should_panic]
+        fn test_inplace_mem_alloc_get_free()
+        {
+            let mut inplace_alloc = InPlaceMemoryAllocator::<Entity>::new();
+            let entity_handle = inplace_alloc.allocate();
+
+            assert!(inplace_alloc.is_live(&entity_handle));
+            inplace_alloc.free(&entity_handle);
+            inplace_alloc.get(&entity_handle); // boom
+        }
     }
 }
