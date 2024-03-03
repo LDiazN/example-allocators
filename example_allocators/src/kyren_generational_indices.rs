@@ -2,6 +2,7 @@
 /// presented here: https://kyren.github.io/2018/09/14/rustconf-talk.html
 /// 
 /// This is the base implementation I will be testing my allocators with.
+use std::collections::VecDeque;
 
 #[derive(Debug, PartialEq, Default)]
 /// This is the simplest implementation, this struct will tell you which index
@@ -9,7 +10,7 @@
 pub struct GenerationalIndices
 {
     indices : Vec<u32>, // Generations. Indices are specified by the array position
-    pub free : Vec<usize>
+    pub free : VecDeque<usize>
 }
 
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -21,13 +22,7 @@ pub struct GenerationalIndex
 
 impl GenerationalIndices
 {
-    #[inline(always)]
-    pub fn new() -> Self
-    {
-        GenerationalIndices { indices: vec![], free: vec![] }
-    }
-
-    pub fn get(&mut self) -> GenerationalIndex
+    pub fn new(&mut self) -> GenerationalIndex
     {
         if self.free.is_empty()
         {
@@ -37,7 +32,7 @@ impl GenerationalIndices
             return GenerationalIndex{index: next_index, generation: 0};
         }
 
-        let index = self.free.pop().unwrap();
+        let index = self.free.pop_front().unwrap();
         let generation = self.indices[index];
 
         GenerationalIndex { index, generation}
@@ -56,7 +51,7 @@ impl GenerationalIndices
             return; // Report an error or something
         }
 
-        self.free.push(index.index);
+        self.free.push_back(index.index);
         self.indices[index.index] += 1;
     }
 }
@@ -77,16 +72,10 @@ impl GenerationalIndex
 }
 
 // -- < Versions with the actual storage > ------------------------
-pub trait LifeCycle {
-    fn destroy(&mut self);
-
-    fn set_index(&mut self, index: GenerationalIndex);
-}
+#[derive(Debug, Default)]
 pub struct GenerationalArrayEntry<T>
 {
-    // Kyren would set this to Option<T> but if we do so we can't get mutable references
-    // to the internal data, only clones
-    item : T, 
+    item : Option<T>,
     generation : u32
 }
 
@@ -97,28 +86,21 @@ pub struct GenerationalArrayEntry<T>
 ///  * You might have to resize an array with too many elements with possibly large storage
 ///  * You have to construct objects in the stack and then copy the entire content into the internal array
 ///  * You might end up with a lot of unused unrecoverable space after a lot of allocations
+#[derive(Debug, Default)]
 pub struct GenerationalIndexArray<T>
-    where T : LifeCycle
 {
     elements : Vec<GenerationalArrayEntry<T>>,
     free: Vec<usize>
 }
 
 impl<T> GenerationalIndexArray<T>
-    where T : LifeCycle
 {
-    #[inline(always)]
-    pub fn new() -> Self
-    {
-        GenerationalIndexArray { elements: vec![], free: vec![] }
-    }
-
-    pub fn store(&mut self, element : T) -> GenerationalIndex
+    pub fn new(&mut self, element : T) -> GenerationalIndex
     {
         if self.free.is_empty()
         {
             let next_index = self.elements.len();
-            let entry = GenerationalArrayEntry{generation: 0, item: element};
+            let entry = GenerationalArrayEntry{generation: 0, item: Some(element)};
             self.elements.push(entry);
 
             return GenerationalIndex{index: next_index, generation: 0};
@@ -126,7 +108,7 @@ impl<T> GenerationalIndexArray<T>
 
         let index = self.free.pop().unwrap();
         let entry = &mut self.elements[index];
-        entry.item = element;
+        entry.item = Some(element);
 
         GenerationalIndex {index, generation: entry.generation}
     }
@@ -146,7 +128,7 @@ impl<T> GenerationalIndexArray<T>
 
         self.free.push(index.index);
         self.elements[index.index].generation += 1;
-        self.elements[index.index].item.destroy();
+        self.elements[index.index].item = None;
     }
 
     pub fn get(&self, index: &GenerationalIndex) -> Option<&T>
@@ -156,7 +138,7 @@ impl<T> GenerationalIndexArray<T>
             return None;
         }
 
-        return Some(&self.elements[index.get_index()].item);
+        return self.elements[index.get_index()].item.as_ref();
     }
 
     pub fn get_mut(&mut self, index: &GenerationalIndex) -> Option<&mut T>
@@ -166,10 +148,9 @@ impl<T> GenerationalIndexArray<T>
             return None;
         }
 
-        return Some(&mut self.elements[index.get_index()].item);
+        return self.elements[index.get_index()].item.as_mut();
     }
 }
 
 // Te previous implementation has some problems about references and pointers. So instead 
 // we will store pointers instead of the entire thing we are allocating.
-
