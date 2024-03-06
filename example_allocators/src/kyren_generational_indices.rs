@@ -3,6 +3,8 @@
 /// 
 /// This is the base implementation I will be testing my allocators with.
 use std::collections::VecDeque;
+use std::rc::Rc;
+use std::cell::{Cell, RefCell};
 
 #[derive(Debug, PartialEq, Default)]
 /// This is the simplest implementation, this struct will tell you which index
@@ -90,7 +92,7 @@ pub struct GenerationalArrayEntry<T>
 pub struct GenerationalIndexArray<T>
 {
     elements : Vec<GenerationalArrayEntry<T>>,
-    free: Vec<usize>
+    free: VecDeque<usize>
 }
 
 impl<T> GenerationalIndexArray<T>
@@ -106,7 +108,7 @@ impl<T> GenerationalIndexArray<T>
             return GenerationalIndex{index: next_index, generation: 0};
         }
 
-        let index = self.free.pop().unwrap();
+        let index = self.free.pop_front().unwrap();
         let entry = &mut self.elements[index];
         entry.item = Some(element);
 
@@ -126,7 +128,7 @@ impl<T> GenerationalIndexArray<T>
             panic!("Trying to free an already dead index");
         }
 
-        self.free.push(index.index);
+        self.free.push_back(index.index);
         self.elements[index.index].generation += 1;
         self.elements[index.index].item = None;
     }
@@ -154,3 +156,78 @@ impl<T> GenerationalIndexArray<T>
 
 // Te previous implementation has some problems about references and pointers. So instead 
 // we will store pointers instead of the entire thing we are allocating.
+
+// We will try to implement a version with smart pointers instead
+#[derive(Default)]
+pub struct GenerationalArrayEntryPtr<T>
+{
+    item : Option<Rc<RefCell<T>>>,
+    generation : u32
+}
+
+/// This version also implements the storage for the thing being identified. 
+/// 
+/// It has some drawbacks: 
+/// 
+///  * You might have to resize an array with too many elements with possibly large storage
+///  * You have to construct objects in the stack and then copy the entire content into the internal array
+///  * You might end up with a lot of unused unrecoverable space after a lot of allocations
+#[derive(Default)]
+pub struct GenerationalIndexArrayPtr<T>
+{
+    elements : Vec<GenerationalArrayEntryPtr<T>>,
+    free: VecDeque<usize>
+}
+
+impl<T> GenerationalIndexArrayPtr<T>
+{
+    pub fn new(&mut self, element : T) -> GenerationalIndex
+    {
+        if self.free.is_empty()
+        {
+            let next_index = self.elements.len();
+            let entry = GenerationalArrayEntryPtr{generation: 0, item: Some(Rc::new(RefCell::new(element)))};
+            self.elements.push(entry);
+
+            return GenerationalIndex{index: next_index, generation: 0};
+        }
+
+        let index = self.free.pop_front().unwrap();
+        let entry = &mut self.elements[index];
+        entry.item = Some(Rc::new(RefCell::new(element)));
+
+        GenerationalIndex {index, generation: entry.generation}
+    }
+
+    #[inline(always)]
+    pub fn is_live(&self, index:  &GenerationalIndex) -> bool
+    {
+        index.get_generation() == self.elements[index.index].generation
+    }
+
+    pub fn free(&mut self, index:&GenerationalIndex)
+    {
+        if !self.is_live(&index)
+        {
+            panic!("Trying to free an already dead index");
+        }
+
+        self.free.push_back(index.index);
+        self.elements[index.index].generation += 1;
+        self.elements[index.index].item = None;
+    }
+
+    pub fn get(&self, index: &GenerationalIndex) -> Option<Rc<RefCell<T>>>
+    {
+        if !self.is_live(index)
+        {
+            return None;
+        }
+
+        return Some(
+            Rc::clone(
+                self.elements[index.get_index()].item.as_ref().unwrap()
+            )
+        );
+    }
+}

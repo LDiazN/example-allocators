@@ -14,7 +14,7 @@ fn generational_array_allocation_benchmark(c: &mut Criterion)
 {
     const N_ENTITIES : u64 = 100;
     c.bench_function("Generational Pointers: Entity Allocation 100", |b| b.iter(|| {
-        let mut gpa = memory_allocators::GenerationalPointersArray::<Entity>::new();
+        let mut gpa = memory_allocators::GenerationalPointersArray::<Entity>::default();
         for i in 0..N_ENTITIES
         {
             let entity = gpa.allocate();
@@ -30,7 +30,7 @@ fn entity_allocator_allocation_benchmark(c: &mut Criterion)
 {
     const N_ENTITIES : u64 = 10_000;
     c.bench_function("Memory Allocator: Entity Allocation 10k", |b| b.iter(|| {
-        let mut en_alloc = memory_allocators::EntityAllocator::<Entity>::new();
+        let mut en_alloc = memory_allocators::EntityAllocator::<Entity>::default();
         for i in 0..N_ENTITIES
         {
             en_alloc.allocate(|entity| {
@@ -58,7 +58,7 @@ fn entity_allocator_access_benchmark(c: &mut Criterion)
     }
 
     c.bench_function("Memory Allocator: Entity Access 100", |b| b.iter(move || benched_fn({
-        let mut en_alloc = memory_allocators::EntityAllocator::<Entity>::new();
+        let mut en_alloc = memory_allocators::EntityAllocator::<Entity>::default();
         let mut pointers = Vec::with_capacity(N_ENTITIES as usize);
         for i in 0..N_ENTITIES
         {
@@ -89,7 +89,7 @@ fn pointers_array_access_benchmark(c: &mut Criterion)
     }
 
     c.bench_function("Pointers Array: Entity Access 100", |b| b.iter(move || benched_fn({
-        let mut alloc = memory_allocators::GenerationalPointersArray::<Entity>::new();
+        let mut alloc = memory_allocators::GenerationalPointersArray::<Entity>::default();
         let mut pointers = Vec::with_capacity(N_ENTITIES as usize);
 
         for i in 0..N_ENTITIES
@@ -110,7 +110,7 @@ fn inplace_mem_alloc_allocation_benchmark(c : &mut Criterion)
 {
     const N_ENTITIES : u64 = 10_000;
     c.bench_function("inplace allocator: Allocation 10k", |b| b.iter(|| {
-        let mut alloc = memory_allocators::InPlaceMemoryAllocator::<Entity>::new();
+        let mut alloc = memory_allocators::InPlaceMemoryAllocator::<Entity>::default();
         for _ in 0..N_ENTITIES
         {
             let entity_handle = alloc.allocate();

@@ -19,6 +19,7 @@ pub type Generation = u32;
 /// 
 /// Users will get a handle that they have to query with this struct
 /// to get the actual reference to the thing they want.
+#[derive(Default)]
 pub struct GenerationalPointersArray<T>
     where T : Default
 {
@@ -35,15 +36,6 @@ pub struct GenerationalPointerEntry<T>
 impl<T> GenerationalPointersArray<T>
     where T: Default
 {
-    pub fn new() -> Self
-    {
-        GenerationalPointersArray
-        {
-            entries: vec![],
-            free: vec![]
-        }
-    }
-
     pub fn allocate(&mut self) -> GenerationalIndex
     {
         if self.free.is_empty()
@@ -120,6 +112,7 @@ impl<T> GenerationalPointersArray<T>
 // The following version is similar to the one before but we use pointers as the handle to 
 // simplify and optimize access
 
+#[derive(Debug, Default)]
 pub struct EntityAllocator<T> 
 {
     free: Vec<*mut T>,
@@ -150,15 +143,6 @@ pub struct EntityPtr<T>
 impl<T> EntityAllocator<T>
     where T : Default
 {
-    pub fn new() -> Self
-    {
-        EntityAllocator
-        {
-            entries: vec![],
-            free: vec![]
-        }
-    }
-
     pub fn allocate(&mut self, init_fn : impl Fn(&mut T)) -> EntityPtr<T>
     {
         if self.free.is_empty()
@@ -284,12 +268,6 @@ struct InPlaceAllocEntry<T>
 impl<T> InPlaceMemoryAllocator<T>
     where T: Default
 {
-    #[inline(always)]
-    pub fn new() -> Self
-    {
-        Self::default()
-    }
-
     pub fn allocate(&mut self) -> GenerationalIndex
     {
         if self.free.is_empty()

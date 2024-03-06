@@ -4,7 +4,7 @@ mod tests
 {
     mod kyren_tests
     {
-        use crate::kyren_generational_indices::{self as kyren, GenerationalIndex, GenerationalIndexArray};
+        use crate::kyren_generational_indices::{self as kyren, GenerationalIndex, GenerationalIndexArray, GenerationalIndexArrayPtr};
 
         #[test]
         fn test_kyren_get()
@@ -117,6 +117,31 @@ mod tests
             let entity_ref = entity_ref.unwrap();
             assert_eq!(entity_ref.name, "Entity2".to_string());
         }
+
+        // -- PTR based allocator
+        #[test]
+        fn test_kyren_ptr_array()
+        {
+            let mut allocator : GenerationalIndexArrayPtr<Entity>= GenerationalIndexArrayPtr::default();
+
+            let genid1 = allocator.new(Entity{
+                    name: "e1".to_string(),
+                    _is_active: false,
+                    _id: GenerationalIndex::default()}
+                );
+            let genid2 = allocator.new(Entity{
+                    name: "e2".to_string(),
+                    _is_active: false,
+                    _id: GenerationalIndex::default()}
+                );
+            
+            let entity1 = allocator.get(&genid1).unwrap();
+            let entity2 = allocator.get(&genid2).unwrap();
+
+            entity1.borrow_mut()._is_active = true;
+            entity2.borrow_mut()._is_active = true;
+        }
+
     }
     
     // Memory allocators:
@@ -141,7 +166,7 @@ mod tests
         #[test]
         fn test_generational_pointer_array_allocate()
         {
-            let mut gpa = GenerationalPointersArray::<Entity>::new();
+            let mut gpa = GenerationalPointersArray::<Entity>::default();
             let entity_handle = gpa.allocate();
 
             // Try initialize it 
@@ -170,7 +195,7 @@ mod tests
         #[test]   
         fn test_generational_pointer_array_free()
         {
-            let mut gpa = GenerationalPointersArray::<Entity>::new();
+            let mut gpa = GenerationalPointersArray::<Entity>::default();
             let entity_handle = gpa.allocate();
 
             assert!(gpa.get(&entity_handle).is_some());
@@ -182,7 +207,7 @@ mod tests
         #[should_panic]
         fn test_generational_pointer_array_double_free()
         {
-            let mut gpa = GenerationalPointersArray::<Entity>::new();
+            let mut gpa = GenerationalPointersArray::<Entity>::default();
             let entity_handle = gpa.allocate();
 
             gpa.free(&entity_handle);
@@ -192,7 +217,7 @@ mod tests
         #[test]
         fn test_mem_alloc_get_ptr()
         {
-            let mut allocator = EntityAllocator::<Entity>::new();
+            let mut allocator = EntityAllocator::<Entity>::default();
     
             fn init_fn(entity : &mut Entity)
             {
@@ -217,7 +242,7 @@ mod tests
         #[test]
         fn test_inplace_mem_alloc_alloc()
         {
-            let mut inplace_alloc = InPlaceMemoryAllocator::<Entity>::new();
+            let mut inplace_alloc = InPlaceMemoryAllocator::<Entity>::default();
             let entity_handle = inplace_alloc.allocate();
             {
                 let entity_ref = inplace_alloc.get(&entity_handle);
@@ -235,7 +260,7 @@ mod tests
         #[test]
         fn test_inplace_mem_alloc_free()
         {
-            let mut inplace_alloc = InPlaceMemoryAllocator::<Entity>::new();
+            let mut inplace_alloc = InPlaceMemoryAllocator::<Entity>::default();
             let entity_handle = inplace_alloc.allocate();
             assert!(inplace_alloc.is_live(&entity_handle));
             inplace_alloc.free(&entity_handle);
@@ -246,7 +271,7 @@ mod tests
         #[should_panic]
         fn test_inplace_mem_alloc_get_free()
         {
-            let mut inplace_alloc = InPlaceMemoryAllocator::<Entity>::new();
+            let mut inplace_alloc = InPlaceMemoryAllocator::<Entity>::default();
             let entity_handle = inplace_alloc.allocate();
 
             assert!(inplace_alloc.is_live(&entity_handle));
