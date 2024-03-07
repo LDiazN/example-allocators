@@ -4,7 +4,7 @@ mod tests
 {
     mod kyren_tests
     {
-        use crate::kyren_generational_indices::{self as kyren, GenerationalIndex, GenerationalIndexArray, GenerationalIndexArrayPtr};
+        use crate::kyren_generational_indices::{self as kyren, GenerationalIndex, GenerationalIndexArray, GenerationalIndexArrayCell};
 
         #[test]
         fn test_kyren_get()
@@ -122,7 +122,7 @@ mod tests
         #[test]
         fn test_kyren_ptr_array()
         {
-            let mut allocator : GenerationalIndexArrayPtr<Entity>= GenerationalIndexArrayPtr::default();
+            let mut allocator : GenerationalIndexArrayCell<Entity>= GenerationalIndexArrayCell::default();
 
             let genid1 = allocator.new(Entity{
                     name: "e1".to_string(),

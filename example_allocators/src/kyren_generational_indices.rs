@@ -159,9 +159,9 @@ impl<T> GenerationalIndexArray<T>
 
 // We will try to implement a version with smart pointers instead
 #[derive(Default)]
-pub struct GenerationalArrayEntryPtr<T>
+pub struct GenerationalArrayEntryCell<T>
 {
-    item : Option<Rc<RefCell<T>>>,
+    item : Option<RefCell<T>>,
     generation : u32
 }
 
@@ -173,20 +173,20 @@ pub struct GenerationalArrayEntryPtr<T>
 ///  * You have to construct objects in the stack and then copy the entire content into the internal array
 ///  * You might end up with a lot of unused unrecoverable space after a lot of allocations
 #[derive(Default)]
-pub struct GenerationalIndexArrayPtr<T>
+pub struct GenerationalIndexArrayCell<T>
 {
-    elements : Vec<GenerationalArrayEntryPtr<T>>,
+    elements : Vec<GenerationalArrayEntryCell<T>>,
     free: VecDeque<usize>
 }
 
-impl<T> GenerationalIndexArrayPtr<T>
+impl<T> GenerationalIndexArrayCell<T>
 {
     pub fn new(&mut self, element : T) -> GenerationalIndex
     {
         if self.free.is_empty()
         {
             let next_index = self.elements.len();
-            let entry = GenerationalArrayEntryPtr{generation: 0, item: Some(Rc::new(RefCell::new(element)))};
+            let entry = GenerationalArrayEntryCell{generation: 0, item: Some(RefCell::new(element))};
             self.elements.push(entry);
 
             return GenerationalIndex{index: next_index, generation: 0};
@@ -194,7 +194,7 @@ impl<T> GenerationalIndexArrayPtr<T>
 
         let index = self.free.pop_front().unwrap();
         let entry = &mut self.elements[index];
-        entry.item = Some(Rc::new(RefCell::new(element)));
+        entry.item = Some(RefCell::new(element));
 
         GenerationalIndex {index, generation: entry.generation}
     }
@@ -217,7 +217,7 @@ impl<T> GenerationalIndexArrayPtr<T>
         self.elements[index.index].item = None;
     }
 
-    pub fn get(&self, index: &GenerationalIndex) -> Option<Rc<RefCell<T>>>
+    pub fn get(&self, index: &GenerationalIndex) -> Option<&RefCell<T>>
     {
         if !self.is_live(index)
         {
@@ -225,9 +225,7 @@ impl<T> GenerationalIndexArrayPtr<T>
         }
 
         return Some(
-            Rc::clone(
                 self.elements[index.get_index()].item.as_ref().unwrap()
-            )
         );
     }
 }
