@@ -147,7 +147,9 @@ mod tests
     // Memory allocators:
     mod memallocs_test
     {
-        use crate::memory_allocators::*;
+        use std::process::id;
+
+        use crate::{kyren_generational_indices::GIAUninitCell, memory_allocators::*};
 
         struct Entity
         {
@@ -277,6 +279,34 @@ mod tests
             assert!(inplace_alloc.is_live(&entity_handle));
             inplace_alloc.free(&entity_handle);
             inplace_alloc.get(&entity_handle); // boom
+        }
+
+
+        // Uninit Cell Generational array 
+        #[test]
+        fn test_uninit_cell_gia() 
+        {
+            let mut uninit_cell_gia = GIAUninitCell::<Entity>::default();
+            let entity1 = Entity{name: "entity1".to_string(), id: 0, is_active: true};
+
+            let idx1 = uninit_cell_gia.new(entity1);
+
+
+            assert!(uninit_cell_gia.is_live(&idx1));
+            
+            // Accessing the entity
+            unsafe {
+                let entity1_ref = uninit_cell_gia.get(&idx1).unwrap();
+                let mut uninit = entity1_ref.borrow_mut();
+                let entity = uninit.assume_init_mut(); // unsafe
+                entity.id = 42;
+                entity.is_active = true;
+            }
+
+            // deleting entity
+            uninit_cell_gia.free(&idx1);
+
+            assert!(!uninit_cell_gia.is_live(&idx1));
         }
     }
 }
