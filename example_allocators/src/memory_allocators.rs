@@ -17,31 +17,28 @@ pub type Generation = u32;
 /// Users will get a handle that they have to query with this struct
 /// to get the actual reference to the thing they want.
 #[derive(Default)]
-pub struct GenerationalPointersArray<T>
-where
-    T: Default,
+pub struct GIABoxUninit<T>
 {
-    entries: Vec<GenerationalPointerEntry<T>>,
+    entries: Vec<GIABoxUninitEntry<T>>,
     free: Vec<usize>,
 }
 
-pub struct GenerationalPointerEntry<T> {
+pub struct GIABoxUninitEntry<T> {
     generation: Generation,
     ptr: Box<MaybeUninit<T>>,
 }
 
-impl<T> GenerationalPointersArray<T>
+impl<T> GIABoxUninit<T>
 where
-    T: Default,
 {
-    pub fn allocate(&mut self) -> GenerationalIndex {
+    pub fn new(&mut self, element : T) -> GenerationalIndex {
         if self.free.is_empty() {
             // Construct a new entry
             let mut new_entry = self._allocate_entry();
             let new_entry_index = self.entries.len();
 
             // Initialize it since it will be retrieved from this function
-            new_entry.ptr.write(T::default());
+            new_entry.ptr.write(element);
 
             // Add it to the current list of entries
             self.entries.push(new_entry);
@@ -56,7 +53,7 @@ where
         let entry = &mut self.entries[next_free];
 
         // Initialize entry, don't return uninitialized memory
-        entry.ptr.write(T::default());
+        entry.ptr.write(element);
 
         return GenerationalIndex {
             index: next_free,
@@ -66,9 +63,9 @@ where
 
     /// Called internally when we have to create a new entry instead of
     /// reusing an old one
-    fn _allocate_entry(&mut self) -> GenerationalPointerEntry<T> {
+    fn _allocate_entry(&mut self) -> GIABoxUninitEntry<T> {
         let item_mem = Box::new(MaybeUninit::<T>::uninit());
-        GenerationalPointerEntry {
+        GIABoxUninitEntry {
             generation: 0,
             ptr: item_mem,
         }
@@ -95,7 +92,7 @@ where
 
         let index = index.index;
         self.free.push(index);
-        let entry: &mut GenerationalPointerEntry<T> = &mut self.entries[index];
+        let entry: &mut GIABoxUninitEntry<T> = &mut self.entries[index];
         entry.generation += 1;
         unsafe {
             entry.ptr.assume_init_drop();

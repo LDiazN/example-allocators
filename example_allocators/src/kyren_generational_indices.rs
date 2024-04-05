@@ -161,7 +161,7 @@ impl<T> GenerationalIndexArray<T>
 #[derive(Default)]
 pub struct GenerationalArrayEntryCell<T>
 {
-    item : Option<Box<RefCell<T>>>,
+    item : Box<Option<RefCell<T>>>,
     generation : u32
 }
 
@@ -186,7 +186,8 @@ impl<T> GenerationalIndexArrayCell<T>
         if self.free.is_empty()
         {
             let next_index = self.elements.len();
-            let entry = GenerationalArrayEntryCell{generation: 0, item: Some(Box::new(RefCell::new(element)))};
+            let entry = GenerationalArrayEntryCell{generation: 0, item:Box::new(Some(RefCell::new(element)))};
+
             self.elements.push(entry);
 
             return GenerationalIndex{index: next_index, generation: 0};
@@ -194,7 +195,7 @@ impl<T> GenerationalIndexArrayCell<T>
 
         let index = self.free.pop_front().unwrap();
         let entry = &mut self.elements[index];
-        entry.item = Some(Box::new(RefCell::new(element)));
+        *entry.item = Some(RefCell::new(element));
 
         GenerationalIndex {index, generation: entry.generation}
     }
@@ -214,19 +215,17 @@ impl<T> GenerationalIndexArrayCell<T>
 
         self.free.push_back(index.index);
         self.elements[index.index].generation += 1;
-        self.elements[index.index].item = None;
+        *self.elements[index.index].item = None;
     }
 
-    pub fn get(&self, index: &GenerationalIndex) -> Option<&Box<RefCell<T>>>
+    pub fn get(&self, index: &GenerationalIndex) -> Option<&RefCell<T>>
     {
         if !self.is_live(index)
         {
             return None;
         }
 
-        return Some(
-                self.elements[index.get_index()].item.as_ref().unwrap()
-        );
+        return (*self.elements[index.get_index()].item).as_ref();
     }
 }
 

@@ -1,6 +1,6 @@
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use example_allocators::{*, memory_allocators::{EntityPtr, EntityAllocator, GenerationalPointersArray}};
+use example_allocators::{*, memory_allocators::{EntityPtr, EntityAllocator, GIABoxUninit}};
 
 #[derive(Default)]
 struct Entity
@@ -14,10 +14,10 @@ fn generational_array_allocation_benchmark(c: &mut Criterion)
 {
     const N_ENTITIES : u64 = 100;
     c.bench_function("Generational Pointers: Entity Allocation 100", |b| b.iter(|| {
-        let mut gpa = memory_allocators::GenerationalPointersArray::<Entity>::default();
+        let mut gpa = memory_allocators::GIABoxUninit::<Entity>::default();
         for i in 0..N_ENTITIES
         {
-            let entity = gpa.allocate();
+            let entity = gpa.new(Entity::default());
             let entity_ref = gpa.get(&entity).unwrap();
             entity_ref.id = i as usize;
             entity_ref.name = "Testing".to_string();
@@ -76,7 +76,7 @@ fn pointers_array_access_benchmark(c: &mut Criterion)
 {
     const N_ENTITIES : u64 = 100;
     
-    fn benched_fn((pointers, _alloc) : (Vec<memory_allocators::GenerationalIndex>, GenerationalPointersArray<Entity>))
+    fn benched_fn((pointers, _alloc) : (Vec<memory_allocators::GenerationalIndex>, GIABoxUninit<Entity>))
     {
         let mut _alloc = _alloc;
         for ptr in pointers
@@ -89,12 +89,12 @@ fn pointers_array_access_benchmark(c: &mut Criterion)
     }
 
     c.bench_function("Pointers Array: Entity Access 100", |b| b.iter(move || benched_fn({
-        let mut alloc = memory_allocators::GenerationalPointersArray::<Entity>::default();
+        let mut alloc = memory_allocators::GIABoxUninit::<Entity>::default();
         let mut pointers = Vec::with_capacity(N_ENTITIES as usize);
 
         for i in 0..N_ENTITIES
         {
-            let handle = alloc.allocate();
+            let handle = alloc.new(Entity::default());
             let entity_ref = alloc.get(&handle).unwrap();
             entity_ref.name = "Testing".to_string();
             entity_ref.id = i as usize;

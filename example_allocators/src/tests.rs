@@ -147,8 +147,6 @@ mod tests
     // Memory allocators:
     mod memallocs_test
     {
-        use std::process::id;
-
         use crate::{kyren_generational_indices::GIAUninitCell, memory_allocators::*};
 
         struct Entity
@@ -168,8 +166,8 @@ mod tests
         #[test]
         fn test_generational_pointer_array_allocate()
         {
-            let mut gpa = GenerationalPointersArray::<Entity>::default();
-            let entity_handle = gpa.allocate();
+            let mut gpa = GIABoxUninit::<Entity>::default();
+            let entity_handle = gpa.new(Entity::default());
 
             // Try initialize it 
             {
@@ -197,8 +195,8 @@ mod tests
         #[test]   
         fn test_generational_pointer_array_free()
         {
-            let mut gpa = GenerationalPointersArray::<Entity>::default();
-            let entity_handle = gpa.allocate();
+            let mut gpa = GIABoxUninit::<Entity>::default();
+            let entity_handle = gpa.new(Entity::default());
 
             assert!(gpa.get(&entity_handle).is_some());
             gpa.free(&entity_handle);
@@ -209,8 +207,8 @@ mod tests
         #[should_panic]
         fn test_generational_pointer_array_double_free()
         {
-            let mut gpa = GenerationalPointersArray::<Entity>::default();
-            let entity_handle = gpa.allocate();
+            let mut gpa = GIABoxUninit::<Entity>::default();
+            let entity_handle = gpa.new(Entity::default());
 
             gpa.free(&entity_handle);
             gpa.free(&entity_handle);
@@ -290,7 +288,6 @@ mod tests
             let entity1 = Entity{name: "entity1".to_string(), id: 0, is_active: true};
 
             let idx1 = uninit_cell_gia.new(entity1);
-
 
             assert!(uninit_cell_gia.is_live(&idx1));
             
