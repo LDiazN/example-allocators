@@ -3,6 +3,7 @@
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::ops::DerefMut;
+use std::cell::RefCell;
 
 /// Default Index type for handle based implementations
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -17,28 +18,28 @@ pub type Generation = u32;
 /// Users will get a handle that they have to query with this struct
 /// to get the actual reference to the thing they want.
 #[derive(Default)]
-pub struct GIABoxUninit<T>
-{
+pub struct GIABoxUninit<T> {
     entries: Vec<GIABoxUninitEntry<T>>,
     free: Vec<usize>,
 }
 
 pub struct GIABoxUninitEntry<T> {
     generation: Generation,
-    ptr: Box<MaybeUninit<T>>,
+    ptr: Box<MaybeUninit<RefCell<T>>>,
 }
 
-impl<T> GIABoxUninit<T>
-where
-{
-    pub fn new(&mut self, element : T) -> GenerationalIndex {
+impl<T> GIABoxUninit<T> {
+    pub fn new(&mut self, element: T) -> GenerationalIndex {
         if self.free.is_empty() {
             // Construct a new entry
-            let mut new_entry = self._allocate_entry();
+            let mut new_entry = GIABoxUninitEntry {
+                generation: 0,
+                ptr: Box::new(MaybeUninit::<RefCell<T>>::uninit()),
+            };
             let new_entry_index = self.entries.len();
 
             // Initialize it since it will be retrieved from this function
-            new_entry.ptr.write(element);
+            new_entry.ptr.write(RefCell::new(element));
 
             // Add it to the current list of entries
             self.entries.push(new_entry);
@@ -53,7 +54,7 @@ where
         let entry = &mut self.entries[next_free];
 
         // Initialize entry, don't return uninitialized memory
-        entry.ptr.write(element);
+        entry.ptr.write(RefCell::new(element));
 
         return GenerationalIndex {
             index: next_free,
@@ -61,28 +62,19 @@ where
         };
     }
 
-    /// Called internally when we have to create a new entry instead of
-    /// reusing an old one
-    fn _allocate_entry(&mut self) -> GIABoxUninitEntry<T> {
-        let item_mem = Box::new(MaybeUninit::<T>::uninit());
-        GIABoxUninitEntry {
-            generation: 0,
-            ptr: item_mem,
-        }
-    }
-
     #[inline(always)]
     pub fn is_live(&self, index: &GenerationalIndex) -> bool {
         return index.generation == self.entries[index.index].generation;
     }
 
-    pub fn get(&mut self, index: &GenerationalIndex) -> Option<&mut T> {
+    pub fn get(&self, index: &GenerationalIndex) -> Option<&RefCell<T>> {
         if !self.is_live(index) {
             return None;
         }
 
-        let entry = &mut self.entries[index.index];
-        return unsafe { Some(entry.ptr.as_mut_ptr().as_mut().unwrap()) };
+        return unsafe {
+            Some(self.entries[index.index].ptr.assume_init_ref())
+        };
     }
 
     pub fn free(&mut self, index: &GenerationalIndex) {
@@ -247,7 +239,10 @@ where
     pub fn allocate(&mut self) -> GenerationalIndex {
         if self.free.is_empty() {
             // Construct a new entry
-            let mut new_entry = self._allocate_entry();
+            let mut new_entry = InPlaceAllocEntry {
+                mem: MaybeUninit::<T>::uninit(),
+                generation: 0,
+            };
             let new_entry_index = self.entries.len();
 
             // Initialize it since it will be retrieved from this function
@@ -272,16 +267,6 @@ where
             index: next_free,
             generation: entry.generation,
         };
-    }
-
-    /// Called internally when we have to create a new entry instead of
-    /// reusing an old one
-    #[inline(always)]
-    fn _allocate_entry(&mut self) -> InPlaceAllocEntry<T> {
-        InPlaceAllocEntry {
-            mem: MaybeUninit::<T>::uninit(),
-            generation: 0,
-        }
     }
 
     #[inline(always)]
@@ -313,4 +298,3 @@ where
         }
     }
 }
-

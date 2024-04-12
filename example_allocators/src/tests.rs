@@ -173,7 +173,7 @@ mod tests
             {
                 let entity_ref = gpa.get(&entity_handle);
                 assert!(entity_ref.is_some());
-                let entity_ref = entity_ref.unwrap();
+                let mut entity_ref = entity_ref.unwrap().borrow_mut();
 
                 entity_ref.id = 42;
                 entity_ref.name = "test1".to_owned();
@@ -185,7 +185,7 @@ mod tests
             {
                 let entity_ref = gpa.get(&entity_handle);
                 assert!(entity_ref.is_some());
-                let entity_ref = entity_ref.unwrap();
+                let entity_ref = entity_ref.unwrap().borrow_mut();
                 assert_eq!(entity_ref.id, 42);
                 assert_eq!(entity_ref.name.as_str(), "test1");
                 assert_eq!(entity_ref.is_active, true);

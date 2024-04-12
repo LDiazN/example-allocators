@@ -18,7 +18,7 @@ fn generational_array_allocation_benchmark(c: &mut Criterion)
         for i in 0..N_ENTITIES
         {
             let entity = gpa.new(Entity::default());
-            let entity_ref = gpa.get(&entity).unwrap();
+            let mut entity_ref = gpa.get(&entity).unwrap().borrow_mut();
             entity_ref.id = i as usize;
             entity_ref.name = "Testing".to_string();
             entity_ref.is_active = true;
@@ -81,7 +81,7 @@ fn pointers_array_access_benchmark(c: &mut Criterion)
         let mut _alloc = _alloc;
         for ptr in pointers
         {
-            let entity_ref = _alloc.get(&ptr).unwrap();
+            let entity_ref = _alloc.get(&ptr).unwrap().borrow_mut();
             let _id = black_box(entity_ref.id);
             let _name = black_box(&entity_ref.name);
             let _is_active = black_box(entity_ref.is_active);
@@ -95,7 +95,7 @@ fn pointers_array_access_benchmark(c: &mut Criterion)
         for i in 0..N_ENTITIES
         {
             let handle = alloc.new(Entity::default());
-            let entity_ref = alloc.get(&handle).unwrap();
+            let mut entity_ref = alloc.get(&handle).unwrap().borrow_mut();
             entity_ref.name = "Testing".to_string();
             entity_ref.id = i as usize;
             entity_ref.is_active = true;
