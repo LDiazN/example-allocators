@@ -147,7 +147,7 @@ mod tests
     // Memory allocators:
     mod memallocs_test
     {
-        use crate::{kyren_generational_indices::GIAUninitCell, memory_allocators::*};
+        use crate::{kyren_generational_indices::GIAUninitCell, memory_allocators::*, allocator_with_pointer};
 
         struct Entity
         {
@@ -304,6 +304,36 @@ mod tests
             uninit_cell_gia.free(&idx1);
 
             assert!(!uninit_cell_gia.is_live(&idx1));
+        }
+
+        #[test]
+        fn test_access_basic_allocator_with_pointers() {
+            // Test that you can easily access entities and alter its values without crashing 
+            // and without much boilerplate
+            let mut allocator = allocator_with_pointer::Allocator::<Entity>::default();
+            let mut entity1 = allocator.new(Entity::default());
+            let mut entity2 = allocator.new(Entity::default());
+
+            // we can initialize both entities, no problem!
+            entity1.id = 42;
+            entity1.is_active = true;
+
+            entity2.id = 69;
+            entity2.name = "Second Entity".to_owned();
+        }
+
+        #[test]
+        fn test_free_basic_allocator_with_pointers() {
+            // Test that you can easily access entities and alter its values without crashing 
+            // and without much boilerplate
+            let mut allocator = allocator_with_pointer::Allocator::<Entity>::default();
+            let entity1 = allocator.new(Entity::default());
+            let entity2 = allocator.new(Entity::default());
+
+
+            allocator.free(&entity1);
+            assert!(!entity1.is_live());
+            assert!(entity2.is_live());
         }
     }
 }

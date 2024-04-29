@@ -94,7 +94,6 @@ impl<T> GIABoxUninit<T> {
 
 // The following version is similar to the one before but we use pointers as the handle to
 // simplify and optimize access
-
 #[derive(Debug, Default)]
 pub struct EntityAllocator<T> {
     free: Vec<*mut T>,
@@ -213,7 +212,6 @@ impl<T> EntityPtr<T> {
 // The following example is a handle based implementation
 // with in-place memory segments, meaning that all entities will be contiguous in memory,
 // which should speed up access for multiple entities, but might be slower when allocating new entities
-
 #[derive(Debug, Default)]
 pub struct InPlaceMemoryAllocator<T>
 where
@@ -239,7 +237,7 @@ where
     pub fn allocate(&mut self) -> GenerationalIndex {
         if self.free.is_empty() {
             // Construct a new entry
-            let mut new_entry = InPlaceAllocEntry {
+           let mut new_entry = InPlaceAllocEntry {
                 mem: MaybeUninit::<T>::uninit(),
                 generation: 0,
             };
