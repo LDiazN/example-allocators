@@ -213,9 +213,7 @@ impl<T> EntityPtr<T> {
 // with in-place memory segments, meaning that all entities will be contiguous in memory,
 // which should speed up access for multiple entities, but might be slower when allocating new entities
 #[derive(Debug, Default)]
-pub struct InPlaceMemoryAllocator<T>
-where
-    T: Default,
+pub struct InPlaceAllocator<T>
 {
     entries: Vec<InPlaceAllocEntry<T>>,
     free: Vec<usize>,
@@ -226,25 +224,23 @@ struct InPlaceAllocEntry<T> {
     // Note that since MaybeUninit has transparent layout, this is the same as having an actual T
     // inside the struct. Having an array of these is the same as having an array of T,
     // making it in place
-    mem: MaybeUninit<T>,
+    value: RefCell<MaybeUninit<T>>,
     generation: Generation,
 }
 
-impl<T> InPlaceMemoryAllocator<T>
-where
-    T: Default,
+impl<T> InPlaceAllocator<T>
 {
-    pub fn allocate(&mut self) -> GenerationalIndex {
+    pub fn new(&mut self, element : T) -> GenerationalIndex {
         if self.free.is_empty() {
             // Construct a new entry
            let mut new_entry = InPlaceAllocEntry {
-                mem: MaybeUninit::<T>::uninit(),
+                value: RefCell::new(MaybeUninit::<T>::uninit()),
                 generation: 0,
             };
             let new_entry_index = self.entries.len();
 
             // Initialize it since it will be retrieved from this function
-            new_entry.mem.write(T::default());
+            new_entry.value.borrow_mut().write(element);
 
             // Add it to the current list of entries
             self.entries.push(new_entry);
@@ -259,7 +255,7 @@ where
         let entry = &mut self.entries[next_free];
 
         // Initialize entry, don't return uninitialized memory
-        entry.mem.write(T::default());
+        entry.value.borrow_mut().write(element);
 
         return GenerationalIndex {
             index: next_free,
@@ -272,14 +268,14 @@ where
         return index.generation == self.entries[index.index].generation;
     }
 
-    pub fn get(&mut self, index: &GenerationalIndex) -> &mut T {
+    pub fn get(&self, index: &GenerationalIndex) -> &mut T {
         debug_assert!(
             self.is_live(index),
             "Trying to retrieve uninitialized memory"
         );
 
-        let entry = &mut self.entries[index.index];
-        return unsafe { entry.mem.as_mut_ptr().as_mut().unwrap() };
+        let entry = &self.entries[index.index];
+        return unsafe { entry.value.borrow_mut().as_mut_ptr().as_mut().unwrap() };
     }
 
     pub fn free(&mut self, index: &GenerationalIndex) {
@@ -292,7 +288,7 @@ where
         let entry = &mut self.entries[index];
         entry.generation += 1;
         unsafe {
-            entry.mem.assume_init_drop();
+            entry.value.borrow_mut().assume_init_drop();
         }
     }
 }

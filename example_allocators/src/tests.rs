@@ -242,8 +242,8 @@ mod tests
         #[test]
         fn test_inplace_mem_alloc_alloc()
         {
-            let mut inplace_alloc = InPlaceMemoryAllocator::<Entity>::default();
-            let entity_handle = inplace_alloc.allocate();
+            let mut inplace_alloc = InPlaceAllocator::<Entity>::default();
+            let entity_handle = inplace_alloc.new(Entity::default());
             {
                 let entity_ref = inplace_alloc.get(&entity_handle);
                 entity_ref.id = 42;
@@ -260,8 +260,8 @@ mod tests
         #[test]
         fn test_inplace_mem_alloc_free()
         {
-            let mut inplace_alloc = InPlaceMemoryAllocator::<Entity>::default();
-            let entity_handle = inplace_alloc.allocate();
+            let mut inplace_alloc = InPlaceAllocator::<Entity>::default();
+            let entity_handle = inplace_alloc.new(Entity::default());
             assert!(inplace_alloc.is_live(&entity_handle));
             inplace_alloc.free(&entity_handle);
             assert!(!inplace_alloc.is_live(&entity_handle));
@@ -271,8 +271,8 @@ mod tests
         #[should_panic]
         fn test_inplace_mem_alloc_get_free()
         {
-            let mut inplace_alloc = InPlaceMemoryAllocator::<Entity>::default();
-            let entity_handle = inplace_alloc.allocate();
+            let mut inplace_alloc = InPlaceAllocator::<Entity>::default();
+            let entity_handle = inplace_alloc.new(Entity::default());
 
             assert!(inplace_alloc.is_live(&entity_handle));
             inplace_alloc.free(&entity_handle);

@@ -110,10 +110,10 @@ fn inplace_mem_alloc_allocation_benchmark(c : &mut Criterion)
 {
     const N_ENTITIES : u64 = 10_000;
     c.bench_function("inplace allocator: Allocation 10k", |b| b.iter(|| {
-        let mut alloc = memory_allocators::InPlaceMemoryAllocator::<Entity>::default();
+        let mut alloc = memory_allocators::InPlaceAllocator::<Entity>::default();
         for _ in 0..N_ENTITIES
         {
-            let entity_handle = alloc.allocate();
+            let entity_handle = alloc.new(Entity::default());
             let entity_ref = alloc.get(&entity_handle);
             entity_ref.id = 42;
             entity_ref.name = "test".to_owned();

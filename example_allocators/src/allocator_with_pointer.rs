@@ -1,14 +1,13 @@
+#[allow(unused)]
 use std::borrow::Borrow;
 use std::mem::MaybeUninit;
-use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
 
 pub type Generation = u32;
 
-/// This is a handle-based allocators.
+/// This is a pointer-based allocator.
 ///
-/// Users will get a handle that they have to query with this struct
-/// to get the actual reference to the thing they want.
+/// The pointer will have a reference to an object allocated within the allocator
 #[derive(Default)]
 pub struct Allocator<T> {
     entries: Vec<Box<Entry<T>>>,
@@ -17,9 +16,11 @@ pub struct Allocator<T> {
 
 pub struct Entry<T> {
     generation: Generation,
-    ptr: MaybeUninit<T>
+    value: MaybeUninit<T>
 }
 
+// To keep this implementation safe, you should not allow the user to construct 
+// an EntityPtr by themselves, always ask the allocator to give you a new one
 pub struct EntityPtr<T> {
     generation: Generation,
     ptr: *mut Entry<T>, // super unsafe raw pointer!
@@ -31,12 +32,12 @@ impl<T> Allocator<T> {
             // Construct a new entry
             let mut new_entry = Box::new(Entry {
                 generation: 0,
-                ptr: MaybeUninit::<T>::uninit(),
+                value: MaybeUninit::<T>::uninit(),
             });
             let new_entry_index = self.entries.len();
 
             // Initialize it since it will be retrieved from this function
-            new_entry.ptr.write(element);
+            new_entry.value.write(element);
 
 
             // Add it to the current list of entries
@@ -51,7 +52,7 @@ impl<T> Allocator<T> {
         let next_free = self.free.pop().unwrap();
 
         // Initialize entry, don't return uninitialized memory
-        unsafe{(*next_free).ptr.write(element)};
+        unsafe{(*next_free).value.write(element)};
 
         let generation = unsafe {
             (*next_free).generation
@@ -69,7 +70,7 @@ impl<T> Allocator<T> {
         self.free.push(ptr.ptr);
         unsafe {
            (*ptr.ptr).generation += 1;
-           (*ptr.ptr).ptr.assume_init_drop();
+           (*ptr.ptr).value.assume_init_drop();
         }
     }
 }
@@ -86,7 +87,7 @@ impl <T> Deref for EntityPtr<T> {
 
     fn deref(&self) -> &Self::Target {
         debug_assert!(self.is_live(), "Trying to deref free pointer");
-        return unsafe {(*self.ptr).ptr.assume_init_ref()}
+        return unsafe {(*self.ptr).value.assume_init_ref()}
     }
 }
 
@@ -94,6 +95,6 @@ impl <T> DerefMut for EntityPtr<T> {
 
     fn deref_mut(&mut self) -> &mut Self::Target {
         debug_assert!(self.is_live(), "Trying to deref free pointer");
-        return unsafe {(*self.ptr).ptr.assume_init_mut()}
+        return unsafe {(*self.ptr).value.assume_init_mut()}
     }
 }
