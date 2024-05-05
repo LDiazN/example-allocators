@@ -215,18 +215,17 @@ mod tests
         }
 
         #[test]
-        fn test_mem_alloc_get_ptr()
+        fn test_box_alloc_get_ptr()
         {
-            let mut allocator = EntityAllocator::<Entity>::default();
+            let mut allocator = BoxAllocator::<Entity>::default();
     
-            fn init_fn(entity : &mut Entity)
-            {
-                entity.name = "Example1".to_string();
-                entity.is_active = true;
-                entity.id = 42;
-            }
-    
-            let entity = allocator.allocate(init_fn);
+            let entity = allocator.new(
+                Entity {
+                            name : "Example1".to_string(),
+                            is_active : true,
+                            id : 42,
+                }
+            );
 
             // Check that initialization works properly
             assert_eq!(entity.name.as_str(), "Example1");
@@ -240,7 +239,7 @@ mod tests
         }
 
         #[test]
-        fn test_inplace_mem_alloc_alloc()
+        fn test_inplace_alloc_alloc()
         {
             let mut inplace_alloc = InPlaceAllocator::<Entity>::default();
             let entity_handle = inplace_alloc.new(Entity::default());
@@ -258,7 +257,7 @@ mod tests
         }
 
         #[test]
-        fn test_inplace_mem_alloc_free()
+        fn test_inplace_alloc_free()
         {
             let mut inplace_alloc = InPlaceAllocator::<Entity>::default();
             let entity_handle = inplace_alloc.new(Entity::default());
@@ -269,7 +268,7 @@ mod tests
 
         #[test]
         #[should_panic]
-        fn test_inplace_mem_alloc_get_free()
+        fn test_inplace_alloc_get_free()
         {
             let mut inplace_alloc = InPlaceAllocator::<Entity>::default();
             let entity_handle = inplace_alloc.new(Entity::default());
@@ -310,7 +309,7 @@ mod tests
         fn test_access_basic_allocator_with_pointers() {
             // Test that you can easily access entities and alter its values without crashing 
             // and without much boilerplate
-            let mut allocator = allocator_with_pointer::Allocator::<Entity>::default();
+            let mut allocator = allocator_with_pointer::BoxAllocator::<Entity>::default();
             let mut entity1 = allocator.new(Entity::default());
             let mut entity2 = allocator.new(Entity::default());
 
@@ -326,7 +325,7 @@ mod tests
         fn test_free_basic_allocator_with_pointers() {
             // Test that you can easily access entities and alter its values without crashing 
             // and without much boilerplate
-            let mut allocator = allocator_with_pointer::Allocator::<Entity>::default();
+            let mut allocator = allocator_with_pointer::BoxAllocator::<Entity>::default();
             let entity1 = allocator.new(Entity::default());
             let entity2 = allocator.new(Entity::default());
 

@@ -9,7 +9,7 @@ pub type Generation = u32;
 ///
 /// The pointer will have a reference to an object allocated within the allocator
 #[derive(Default)]
-pub struct Allocator<T> {
+pub struct BoxAllocator<T> {
     entries: Vec<Box<Entry<T>>>,
     free: Vec<*mut Entry<T>>,
 }
@@ -26,7 +26,7 @@ pub struct EntityPtr<T> {
     ptr: *mut Entry<T>, // super unsafe raw pointer!
 }
 
-impl<T> Allocator<T> {
+impl<T> BoxAllocator<T> {
     pub fn new(&mut self, element: T) -> EntityPtr<T> {
         if self.free.is_empty() {
             // Construct a new entry

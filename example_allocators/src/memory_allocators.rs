@@ -94,118 +94,97 @@ impl<T> GIABoxUninit<T> {
 
 // The following version is similar to the one before but we use pointers as the handle to
 // simplify and optimize access
-#[derive(Debug, Default)]
-pub struct EntityAllocator<T> {
-    free: Vec<*mut T>,
-    entries: Vec<Box<EntityEntry<T>>>,
+/// This is a pointer-based allocator.
+///
+/// The pointer will have a reference to an object allocated within the allocator
+#[derive(Default)]
+pub struct BoxAllocator<T> {
+    entries: Vec<Box<Entry<T>>>,
+    free: Vec<*mut Entry<T>>,
 }
 
-#[derive(Debug)]
-#[repr(C)]
-pub struct EntityEntry<T> {
-    header: EntryHeader,
-    item: MaybeUninit<T>,
-}
-
-#[derive(Debug, Default)]
-pub struct EntryHeader {
+pub struct Entry<T> {
     generation: Generation,
+    value: MaybeUninit<T>
 }
 
-#[derive(Debug, Clone, Copy)]
+// To keep this implementation safe, you should not allow the user to construct 
+// an EntityPtr by themselves, always ask the allocator to give you a new one
 pub struct EntityPtr<T> {
-    ptr: *mut T,
     generation: Generation,
+    ptr: *mut Entry<T>, // super unsafe raw pointer!
 }
 
-impl<T> EntityAllocator<T>
-where
-    T: Default,
-{
-    pub fn allocate(&mut self, init_fn: impl Fn(&mut T)) -> EntityPtr<T> {
+impl<T> BoxAllocator<T> {
+    pub fn new(&mut self, element: T) -> EntityPtr<T> {
         if self.free.is_empty() {
-            // Allocate a new entry
-            let mut mem = MaybeUninit::<T>::uninit();
-            mem.write(T::default());
-
-            let mut new_entry = Box::new(EntityEntry {
-                header: EntryHeader::default(),
-                item: mem,
+            // Construct a new entry
+            let mut new_entry = Box::new(Entry {
+                generation: 0,
+                value: MaybeUninit::<T>::uninit(),
             });
+            let new_entry_index = self.entries.len();
 
-            // Pointer to return
-            let t_ptr = new_entry.item.as_mut_ptr();
+            // Initialize it since it will be retrieved from this function
+            new_entry.value.write(element);
 
-            // Initialize new entry:
-            unsafe {
-                (init_fn)(new_entry.item.as_mut_ptr().as_mut().unwrap());
-            }
 
+            // Add it to the current list of entries
             self.entries.push(new_entry);
 
-            // Create pointer:
-            return EntityPtr {
-                ptr: t_ptr,
+            return EntityPtr{
+                ptr: &mut *self.entries[new_entry_index] as  *mut Entry<T>,
                 generation: 0,
             };
         }
 
-        let entity_ptr = self.free.pop().unwrap();
-        let entry = unsafe { EntityEntry::from_ptr(entity_ptr) };
-        unsafe {
-            (init_fn)(entry.item.as_mut_ptr().as_mut().unwrap());
-        }
+        let next_free = self.free.pop().unwrap();
 
-        return EntityPtr {
-            ptr: entity_ptr,
-            generation: entry.header.generation,
+        // Initialize entry, don't return uninitialized memory
+        unsafe{(*next_free).value.write(element)};
+
+        let generation = unsafe {
+            (*next_free).generation
         };
-    }
 
-    pub fn free(&mut self, entity_ptr: &EntityPtr<T>) {
-        if !entity_ptr.is_live() {
-            panic!("Trying to free already unused index");
+        return EntityPtr{
+            ptr: next_free,
+            generation: generation
         }
-
-        let entry = unsafe { EntityEntry::from_ptr(entity_ptr.ptr) };
-        entry.header.generation += 1;
-        unsafe { entry.item.assume_init_drop() };
-
-        self.free.push(entity_ptr.ptr);
     }
-}
 
-impl<T> Deref for EntityPtr<T> {
-    type Target = T;
+    pub fn free(&mut self, ptr: &EntityPtr<T>) {
 
-    fn deref(&self) -> &Self::Target {
-        debug_assert!(self.is_live(), "Trying to deref invalid entity ptr");
-        unsafe { self.ptr.as_ref().unwrap() }
-    }
-}
-
-impl<T> DerefMut for EntityPtr<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        debug_assert!(self.is_live(), "Trying to deref invalid entity ptr");
-        unsafe { self.ptr.as_mut().unwrap() }
-    }
-}
-
-impl<'a, T> EntityEntry<T> {
-    unsafe fn from_ptr(ptr: *mut T) -> &'a mut Self {
-        ptr.cast::<u8>()
-            .sub(std::mem::size_of::<EntityEntry<T>>() - std::mem::size_of::<T>())
-            .cast::<EntityEntry<T>>()
-            .as_mut()
-            .unwrap()
+        debug_assert!(ptr.is_live(), "Trying to double-free a pointer");
+        self.free.push(ptr.ptr);
+        unsafe {
+           (*ptr.ptr).generation += 1;
+           (*ptr.ptr).value.assume_init_drop();
+        }
     }
 }
 
 impl<T> EntityPtr<T> {
+    #[inline(always)]
     pub fn is_live(&self) -> bool {
-        let entry = unsafe { EntityEntry::from_ptr(self.ptr) };
+        return self.generation == unsafe {(*self.ptr).generation}
+    }
+}
 
-        return entry.header.generation == self.generation;
+impl <T> Deref for EntityPtr<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        debug_assert!(self.is_live(), "Trying to deref free pointer");
+        return unsafe {(*self.ptr).value.assume_init_ref()}
+    }
+}
+
+impl <T> DerefMut for EntityPtr<T> {
+
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        debug_assert!(self.is_live(), "Trying to deref free pointer");
+        return unsafe {(*self.ptr).value.assume_init_mut()}
     }
 }
 
